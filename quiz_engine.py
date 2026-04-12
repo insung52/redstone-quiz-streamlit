@@ -1,12 +1,12 @@
 from data.questions import load_questions
 
 
-def calculate_score(answers: dict) -> int:
+def calculate_score(answers: dict, level: str = "basic") -> int:
     """
     answers: {question_index: chosen_index}
     정답과 비교하여 맞힌 문제 수 반환.
     """
-    questions = load_questions()
+    questions = load_questions(level)
     return sum(
         1
         for i, q in enumerate(questions)
