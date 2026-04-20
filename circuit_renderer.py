@@ -134,6 +134,9 @@ def _load_sprite(name: str) -> Image.Image:
 # lamp 는 실제 마인크래프트 규칙상 와이어 형태 결정에 포함되지 않음
 _WIRE_CONNECTABLE_PREFIXES = ("wire_", "lever_", "torch_", "repeater_")
 
+# 논리 회로 다이어그램에서 conn_ 타일이 연결되는 이웃 접두어
+_LOGIC_CONNECTABLE_PREFIXES = ("conn_", "input_", "output_", "gate_")
+
 
 def _neighbor(r: int, c: int, d: str) -> tuple:
     """방향 문자('N','S','E','W') → 인접 셀 좌표."""
@@ -169,6 +172,46 @@ def _get_wire_dirs(layout: tuple, r: int, c: int) -> frozenset:
         dirs = {"N", "S", "E", "W"}
 
     return frozenset(dirs)
+
+
+def _get_conn_dirs(layout: tuple, r: int, c: int) -> frozenset:
+    """논리 회로 conn 타일의 연결 방향 집합 반환."""
+    rows = len(layout)
+    dirs = set()
+    for d in ("N", "S", "E", "W"):
+        nr, nc = _neighbor(r, c, d)
+        if 0 <= nr < rows and 0 <= nc < len(layout[nr]):
+            nb = layout[nr][nc]
+            if any(nb.startswith(p) for p in _LOGIC_CONNECTABLE_PREFIXES):
+                dirs.add(d)
+    if len(dirs) == 1:
+        dirs.add(_DIR_OPPOSITE[next(iter(dirs))])
+    elif len(dirs) == 0:
+        dirs = {"N", "S", "E", "W"}
+    return frozenset(dirs)
+
+
+@lru_cache(maxsize=256)
+def _make_conn_tile(dirs: frozenset, on: bool) -> Image.Image:
+    """논리 회로 연결선 타일 동적 생성 (방향·on/off 기반)."""
+    H      = TILE_SIZE // 2
+    bg     = (240, 240, 248, 255)
+    line_c = (50, 110, 220, 255) if on else (140, 140, 160, 255)
+    dot_c  = (30, 85, 200, 255)  if on else (110, 110, 130, 255)
+    lw, dr = 4, 4
+
+    img  = Image.new("RGBA", (TILE_SIZE, TILE_SIZE), bg)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([0, 0, TILE_SIZE - 1, TILE_SIZE - 1],
+                   outline=(190, 190, 210, 255), width=1)
+
+    if "W" in dirs: draw.line([(0, H), (H, H)],         fill=line_c, width=lw)
+    if "E" in dirs: draw.line([(H, H), (TILE_SIZE, H)], fill=line_c, width=lw)
+    if "N" in dirs: draw.line([(H, 0), (H, H)],         fill=line_c, width=lw)
+    if "S" in dirs: draw.line([(H, H), (H, TILE_SIZE)], fill=line_c, width=lw)
+
+    draw.ellipse([H - dr, H - dr, H + dr, H + dr], fill=dot_c)
+    return img
 
 
 @lru_cache(maxsize=1)
@@ -391,7 +434,7 @@ def get_animation_frames(circuit_layout: tuple) -> list:
     for i in range(1, len(on_positions) + 1):
         active     = on_positions[:i]
         active_set = {(r, c) for r, c, _ in active}
-        sig        = {(r, c): pre_strengths[(r, c)] for r, c, _ in active}
+        sig        = {(r, c): pre_strengths.get((r, c), 15) for r, c, _ in active}
         frame_layout = tuple(
             tuple(
                 name if (r, c) in active_set else _QUIZ_MASK.get(name, name)
@@ -417,7 +460,14 @@ def _render_canvas(circuit_layout: tuple, signal_strengths: dict | None) -> byte
     cols = max(len(row) for row in circuit_layout)
     canvas_w = cols * TILE_SIZE + max(cols - 1, 0) * GRID_GAP + 8
     canvas_h = rows * TILE_SIZE + max(rows - 1, 0) * GRID_GAP + 8
-    canvas   = Image.new("RGBA", (canvas_w, canvas_h), (28, 28, 28, 255))
+
+    # 논리 회로 다이어그램이면 밝은 배경 사용
+    is_logic = any(
+        name.startswith(("gate_", "input_", "output_", "conn_"))
+        for row in circuit_layout for name in row
+    )
+    bg_color = (245, 245, 252, 255) if is_logic else (28, 28, 28, 255)
+    canvas   = Image.new("RGBA", (canvas_w, canvas_h), bg_color)
 
     for r, row in enumerate(circuit_layout):
         for c, name in enumerate(row):
@@ -430,6 +480,10 @@ def _render_canvas(circuit_layout: tuple, signal_strengths: dict | None) -> byte
                     tile = _make_wire_tile(dirs, on, max(1, s) if on else 15)
                 else:
                     tile = _make_wire_tile(dirs, on, 15)
+            elif name.startswith("conn_"):
+                dirs = _get_conn_dirs(circuit_layout, r, c)
+                on   = (name == "conn_on")
+                tile = _make_conn_tile(dirs, on)
             else:
                 tile = _load_sprite(name)
             x = 4 + c * (TILE_SIZE + GRID_GAP)

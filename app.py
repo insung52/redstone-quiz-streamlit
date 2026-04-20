@@ -56,6 +56,7 @@ def page_home() -> None:
 
     # 과제 필수: 학번/이름 첫 화면 표시
     st.info(f"학번: {STUDENT_ID}  |  이름: {STUDENT_NAME}")
+    st.image("redstone.png", use_container_width=True)
 
     st.markdown(
         """
