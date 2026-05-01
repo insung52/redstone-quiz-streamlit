@@ -83,6 +83,7 @@ def page_home() -> None:
             "- 신호 강도 & OR 게이트"
         )
         if st.button("기초 레벨 시작", type="primary", use_container_width=True):
+            print("[LOG] 기초 레벨 시작 버튼 클릭")
             st.session_state.level = "basic"
             st.session_state.page = "quiz" if st.session_state.logged_in else "login"
             st.rerun()
@@ -96,6 +97,7 @@ def page_home() -> None:
             "- 드 모르간 법칙 응용"
         )
         if st.button("고급 레벨 시작", type="secondary", use_container_width=True):
+            print("[LOG] 고급 레벨 시작 버튼 클릭")
             st.session_state.level = "advanced"
             st.session_state.page = "quiz" if st.session_state.logged_in else "login"
             st.rerun()
@@ -113,7 +115,9 @@ def page_login() -> None:
         submitted = st.form_submit_button("로그인", use_container_width=True)
 
     if submitted:
+        print(f"[LOG] 로그인 시도: {username.strip()}")
         if verify_login(username, password):
+            print(f"[LOG] 로그인 성공: {username.strip()}")
             st.session_state.logged_in = True
             st.session_state.username = username.strip()
             st.session_state.login_attempts = 0
@@ -121,6 +125,7 @@ def page_login() -> None:
             st.session_state.page = "quiz" if st.session_state.level else "home"
             st.rerun()
         else:
+            print(f"[LOG] 로그인 실패: {username.strip()}")
             st.session_state.login_attempts += 1
             attempts = st.session_state.login_attempts
             st.error(
@@ -206,6 +211,7 @@ def page_quiz() -> None:
             disabled=(chosen_label is None),
         ):
             chosen_index = q["choices"].index(chosen_label)
+            print(f"[LOG] Q{q_idx + 1} 답 제출: {chosen_label}")
             st.session_state.current_answer = chosen_index
             st.session_state.answers[q_idx] = chosen_index
             st.session_state.quiz_state = "animating"
@@ -244,6 +250,7 @@ def page_quiz() -> None:
 
         next_label = "결과 보기 →" if q_idx + 1 >= total else "다음 문제 →"
         if st.button(next_label, type="primary", use_container_width=True):
+            print(f"[LOG] Q{q_idx + 1} → {'결과 페이지' if q_idx + 1 >= total else f'Q{q_idx + 2}'}")
             st.session_state.quiz_state = "answering"
             st.session_state.current_answer = None
             st.session_state.show_logic = False
@@ -331,6 +338,7 @@ def page_result() -> None:
 
     st.markdown("---")
     if st.button("다시 도전하기", type="primary", use_container_width=True):
+        print("[LOG] 퀴즈 재시작")
         reset_quiz()
         st.rerun()
 
